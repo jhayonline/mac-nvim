@@ -19,6 +19,8 @@ keymap.set("n", "<C-Right>", ":vertical resize +4<CR>", { desc = "Wider" })
 -- tab management
 keymap.set("n", "<Tab>", "<cmd>BufferLineCycleNext<CR>", { desc = "Go to next buffer" })
 keymap.set("n", "<S-Tab>", "<cmd>BufferLineCyclePrev<CR>", { desc = "Go to previous buffer" })
+keymap.set("n", "<S-l>", "<cmd>BufferLineCycleNext<CR>", { desc = "Go to next buffer" })
+keymap.set("n", "<S-h>", "<cmd>BufferLineCyclePrev<CR>", { desc = "Go to previous buffer" })
 keymap.set("n", "<leader>x", "<cmd>bdelete<CR>", { desc = "Close current buffer" })
 keymap.set("n", "<leader>n", "<cmd>tabnew<CR>", { desc = "New tab" })
 keymap.set("v", "J", ":m '>+1<CR>gv=gv")

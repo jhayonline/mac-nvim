@@ -128,18 +128,205 @@ return {
 		-- language servers
 		-- ============================
 
-		-- typescript / tsx
+		-- The shared LspAttach handler above guards inlay hints behind
+		-- `server_capabilities.inlayhintprovider`. Lua keys are case-sensitive
+		-- and the real key is `inlayHintProvider`, so that branch has never
+		-- fired for any server. Rather than repair it here -- which would
+		-- switch hints on for every language at once -- servers that want them
+		-- opt in explicitly with this on_attach. Delete these once the shared
+		-- handler is fixed.
+		local function enable_inlay_hints(client, bufnr)
+			if client:supports_method("textDocument/inlayHint") then
+				vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+			end
+		end
+
+		-- ============================
+		-- typescript / react (tsx)
+		-- ============================
+		-- Inlay hints and the import preferences are the two things that make
+		-- this feel like a real TS editor rather than a completion popup. The
+		-- hint settings are per-language and must be spelled out twice --
+		-- ts_ls keys them separately for .ts and .tsx/.js.
+		local ts_inlay_hints = {
+			includeInlayParameterNameHints = "literals",
+			includeInlayParameterNameHintsWhenArgumentMatchesName = false,
+			includeInlayFunctionParameterTypeHints = true,
+			includeInlayVariableTypeHints = false,
+			includeInlayVariableTypeHintsWhenTypeMatchesName = false,
+			includeInlayPropertyDeclarationTypeHints = true,
+			includeInlayFunctionLikeReturnTypeHints = true,
+			includeInlayEnumMemberValueHints = true,
+		}
+
+		local ts_preferences = {
+			-- Honour the "paths" in tsconfig.json, so an auto-import writes
+			-- `@/components/Button` rather than `../../components/Button`.
+			importModuleSpecifierPreference = "shortest",
+			importModuleSpecifier = "shortest",
+			-- React 17+ JSX transform: no `import React` needed.
+			jsxAttributeCompletionStyle = "auto",
+			includePackageJsonAutoImports = "auto",
+			quotePreference = "auto",
+		}
+
 		vim.lsp.config("ts_ls", {
 			capabilities = capabilities,
+			on_attach = enable_inlay_hints,
 			filetypes = {
 				"typescript",
 				"typescriptreact",
 				"javascript",
 				"javascriptreact",
 			},
+			settings = {
+				typescript = {
+					inlayHints = ts_inlay_hints,
+					preferences = ts_preferences,
+					updateImportsOnFileMove = { enabled = "always" },
+					suggest = { completeFunctionCalls = true },
+				},
+				javascript = {
+					inlayHints = ts_inlay_hints,
+					preferences = ts_preferences,
+					updateImportsOnFileMove = { enabled = "always" },
+					suggest = { completeFunctionCalls = true },
+				},
+				-- Report the same unused/unreachable diagnostics the editor
+				-- shows in VS Code rather than only compiler errors.
+				completions = { completeFunctionCalls = true },
+			},
 		})
 
 		vim.lsp.enable("ts_ls")
+
+		-- ============================
+		-- tailwind css
+		-- ============================
+		-- The server was installed through mason but never configured, so it
+		-- was running on defaults: no completions in .tsx, no colour swatches,
+		-- and no awareness of class names built by clsx/cva/tailwind-merge.
+		vim.lsp.config("tailwindcss", {
+			capabilities = capabilities,
+			filetypes = {
+				"html",
+				"css",
+				"scss",
+				"less",
+				"javascript",
+				"javascriptreact",
+				"typescript",
+				"typescriptreact",
+				"svelte",
+				"vue",
+				-- Laravel: Tailwind classes live in Blade templates. Plain
+				-- .php is deliberately absent -- attaching there starts a
+				-- Tailwind client on every controller and model for no gain.
+				"blade",
+			},
+			-- Tailwind v4 configures itself from CSS (@import "tailwindcss"),
+			-- v3 from tailwind.config.js. Root on either, plus the package
+			-- manifest so a v4 project without a JS config still attaches.
+			root_markers = {
+				"tailwind.config.js",
+				"tailwind.config.cjs",
+				"tailwind.config.mjs",
+				"tailwind.config.ts",
+				"postcss.config.js",
+				"postcss.config.mjs",
+				"package.json",
+				".git",
+			},
+			settings = {
+				tailwindCSS = {
+					validate = true,
+					-- "Unknown at rule @tailwind/@apply/@theme" is the single
+					-- most common false positive; silence just that one.
+					lint = {
+						cssConflict = "warning",
+						invalidApply = "error",
+						invalidConfigPath = "error",
+						invalidScreen = "error",
+						invalidTailwindDirective = "error",
+						invalidVariant = "error",
+						recommendedVariantOrder = "warning",
+						unusedClass = "ignore",
+					},
+					-- Where to look for class names beyond a bare
+					-- class=/className=. These cover the patterns a real React
+					-- codebase uses: cva/clsx/cn helpers and tailwind-merge.
+					experimental = {
+						classRegex = {
+							{ "cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]" },
+							{ "cx\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]" },
+							{ "cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]" },
+							{ "clsx\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]" },
+							{ "tw`([^`]*)", "([^`]*)" },
+							"tw`([^`]*)",
+							"class[Nn]ame\\s*[:=]\\s*[\"'`]([^\"'`]*)",
+						},
+					},
+					includeLanguages = {
+						-- Blade is not a language the server knows; tell it to
+						-- treat those buffers as HTML for class extraction.
+						blade = "html",
+						typescriptreact = "javascript",
+						javascriptreact = "javascript",
+					},
+				},
+			},
+		})
+
+		vim.lsp.enable("tailwindcss")
+
+		-- ============================
+		-- eslint
+		-- ============================
+		-- Linting as diagnostics, plus :EslintFixAll wired to run on save
+		-- below. Only attaches when the project actually has an eslint config,
+		-- so non-linted scratch files stay quiet.
+		vim.lsp.config("eslint", {
+			capabilities = capabilities,
+			filetypes = {
+				"javascript",
+				"javascriptreact",
+				"typescript",
+				"typescriptreact",
+				"svelte",
+				"vue",
+			},
+			settings = {
+				-- Respect flat config (eslint.config.js), the default since
+				-- eslint 9.
+				useFlatConfig = true,
+				workingDirectories = { mode = "auto" },
+				format = false, -- prettier owns formatting, not eslint
+			},
+		})
+
+		vim.lsp.enable("eslint")
+
+		-- ============================
+		-- emmet
+		-- ============================
+		-- `div.flex.gap-2<C-y>,` expansion inside JSX and Blade.
+		vim.lsp.config("emmet_ls", {
+			capabilities = capabilities,
+			filetypes = {
+				"html",
+				"css",
+				"scss",
+				"less",
+				"javascriptreact",
+				"typescriptreact",
+				"svelte",
+				"vue",
+				"blade",
+				"php",
+			},
+		})
+
+		vim.lsp.enable("emmet_ls")
 
 		-- ============================
 		-- clang
@@ -214,25 +401,11 @@ return {
 		-- ============================
 		-- rust
 		-- ============================
-		vim.lsp.config("rust_analyzer", {
-			capabilities = capabilities,
-			settings = {
-				["rust-analyzer"] = {
-					inlayhints = {
-						typehints = { enable = true },
-						parameterhints = { enable = false },
-						chaininghints = { enable = false },
-						bindingmodehints = { enable = false },
-						closurereturntypehints = { enable = "never" },
-						lifetimeelisionhints = { enable = "never" },
-						reborrowhints = { enable = false },
-						closingbracehints = { enable = false },
-					},
-				},
-			},
-		})
-
-		vim.lsp.enable("rust_analyzer")
+		-- rust_analyzer is owned by rustaceanvim (engine.plugins.rust), which
+		-- starts and configures the server itself and adds :RustLsp on top --
+		-- runnables, debuggables, macro expansion, HIR/MIR views. Enabling it
+		-- here as well would start a second client on every Rust buffer, so
+		-- the configuration lives there, not here.
 
 		-- ============================
 		-- typst
@@ -334,7 +507,54 @@ return {
 		-- ============================
 		vim.lsp.config("intelephense", {
 			capabilities = capabilities,
+			on_attach = enable_inlay_hints,
+			-- Blade files are PHP too: intelephense will not parse the
+			-- template syntax, but it resolves the PHP inside @php blocks and
+			-- keeps the workspace index complete.
 			filetypes = { "php" },
+			root_markers = { "composer.json", ".git" },
+			settings = {
+				intelephense = {
+					-- Without the framework stubs, every Laravel facade
+					-- (Route::, Schema::, Auth::) and every global helper
+					-- (route(), view(), collect(), dd()) is an undefined
+					-- symbol. This is the single setting that makes
+					-- intelephense usable on a Laravel codebase.
+					stubs = {
+						"apache", "bcmath", "bz2", "calendar", "com_dotnet", "Core", "csprng",
+						"ctype", "curl", "date", "dba", "dom", "enchant", "exif", "FFI",
+						"fileinfo", "filter", "fpm", "ftp", "gd", "gettext", "gmp", "hash",
+						"iconv", "imap", "intl", "json", "ldap", "libxml", "mbstring", "meta",
+						"mysqli", "oci8", "odbc", "openssl", "pcntl", "pcre", "PDO", "pdo_mysql",
+						"pdo_pgsql", "pdo_sqlite", "pgsql", "Phar", "posix", "pspell", "random",
+						"readline", "Reflection", "session", "shmop", "SimpleXML", "snmp", "soap",
+						"sockets", "sodium", "SPL", "sqlite3", "standard", "superglobals",
+						"sysvmsg", "sysvsem", "sysvshm", "tidy", "tokenizer", "xml", "xmlreader",
+						"xmlrpc", "xmlwriter", "xsl", "Zend OPcache", "zip", "zlib",
+					},
+					files = {
+						-- Laravel apps are large; the default 1MB cap silently
+						-- skips the bigger vendor files.
+						maxSize = 5000000,
+					},
+					environment = {
+						includePaths = {
+							-- _ide_helper.php / _ide_helper_models.php from
+							-- barryvdh/laravel-ide-helper, when present.
+							"vendor/barryvdh/laravel-ide-helper/",
+						},
+					},
+					diagnostics = {
+						-- Blade compiles to PHP that intelephense cannot see,
+						-- so undefined-variable noise in views is expected.
+						undefinedVariables = true,
+					},
+					completion = {
+						insertUseDeclaration = true,
+						fullyQualifyGlobalConstantsAndFunctions = false,
+					},
+				},
+			},
 		})
 		vim.lsp.enable("intelephense")
 
@@ -415,6 +635,36 @@ return {
 			filetypes = { "sh", "bash" },
 		})
 		vim.lsp.enable("bashls")
+
+		-- ============================
+		-- holyc
+		-- ============================
+		-- hcc bundles its own language server: diagnostics, hover, completion
+		-- across the whole tos.HH stdlib, definitions, references, document
+		-- highlight and rename. Filetype detection, syntax and the :HolyC*
+		-- commands live in engine.core.holyc.
+		if vim.fn.executable("hcc") == 1 then
+			vim.lsp.config("hcc", {
+				capabilities = capabilities,
+				cmd = { "hcc", "-lsp" },
+				filetypes = { "holyc" },
+				-- Per the upstream README: fall back to the file's own
+				-- directory rather than to nil, so a scratch .HC outside a
+				-- repo still gets a workspace root instead of running in
+				-- single-file mode.
+				root_dir = function(bufnr, on_dir)
+					local name = vim.api.nvim_buf_get_name(bufnr)
+					on_dir(
+						vim.fs.root(bufnr, { ".git" })
+							or (name ~= "" and vim.fs.dirname(name))
+							or vim.uv.cwd()
+					)
+				end,
+				-- cmd_env = { HCC_LSP_LOG = "1" },  -- trace, read with :LspLog
+			})
+
+			vim.lsp.enable("hcc")
+		end
 
 		-- ============================
 		-- zig

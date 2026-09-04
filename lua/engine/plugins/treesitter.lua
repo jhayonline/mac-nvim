@@ -54,10 +54,13 @@ return {
 			end, { force = true })
 		end
 
-		-- Get the treesitter module
-		local treesitter = require("nvim-treesitter")
+		-- The module that owns highlight/indent/autotag/ensure_installed on the
+		-- master branch. `require("nvim-treesitter")` also has a setup(), but it
+		-- is a different, internal one that silently ignores every option below
+		-- -- which is why no parser was ever installed and highlighting was off
+		-- for every language except the handful Neovim bundles.
+		local treesitter = require("nvim-treesitter.configs")
 
-		-- Configure treesitter using the new API
 		treesitter.setup({
 			-- enable syntax highlighting
 			highlight = {
@@ -66,10 +69,10 @@ return {
 			},
 			-- Treesitter indent can override normal `o`/`O` newline indent behavior.
 			indent = { enable = false },
-			-- enable autotagging (w/ nvim-ts-autotag plugin)
-			autotag = {
-				enable = true,
-			},
+			-- NOTE: autotag is NOT configured here. nvim-ts-autotag dropped its
+			-- nvim-treesitter module integration, so an `autotag` key in this
+			-- table is silently ignored -- it never registered the insert-mode
+			-- `>` and `/` maps that close a tag. It is set up below instead.
 			-- ensure these language parsers are installed
 			ensure_installed = {
 				"json",
@@ -97,6 +100,25 @@ return {
 				"gdscript",
 				"gdshader",
 				"godot_resource",
+				-- C# / .NET: c_sharp for sources, xml for .csproj/.props/.slnx,
+				-- sql for the scripts EF migrations generate.
+				"c_sharp",
+				"xml",
+				"sql",
+				-- React / TypeScript. tsx covers .tsx and .jsx; typescript
+				-- covers .ts. jsdoc and regex are injected into both, and
+				-- scss/styled cover the CSS side of a component tree.
+				"jsdoc",
+				"regex",
+				"scss",
+				-- Rust, plus the toml that Cargo.toml and rustfmt.toml are.
+				"rust",
+				"toml",
+				-- PHP / Laravel. phpdoc is injected into php docblocks; the
+				-- blade parser is registered separately below because
+				-- nvim-treesitter does not ship one.
+				"php",
+				"phpdoc",
 			},
 			incremental_selection = {
 				enable = true,
@@ -107,6 +129,24 @@ return {
 					node_decremental = "<bs>",
 				},
 			},
+		})
+
+		-- Auto-close and auto-rename HTML/JSX tags. Typing `<div>` writes the
+		-- closing `</div>`; editing either half renames the other. Note this is
+		-- NOT configurable via nvim-treesitter's `autotag` key any more -- the
+		-- plugin dropped that integration, so it needs its own setup() call.
+		require("nvim-ts-autotag").setup({
+			opts = {
+				enable_close = true,
+				enable_rename = true,
+				-- Off by default upstream: typing `/` anywhere would try to
+				-- close a tag, which misfires in attribute values and URLs.
+				enable_close_on_slash = false,
+			},
+			-- html, xml, jsx/tsx, svelte, php, blade and markdown are built in
+			-- and need no aliases. Razor (.cshtml) is deliberately absent: the
+			-- plugin drives every edit off a treesitter parse, and nvim-treesitter
+			-- ships no razor parser, so an alias registers but never fires.
 		})
 	end,
 }

@@ -1,4 +1,7 @@
 require("engine.core.options")
 require("engine.core.keymaps")
 require("engine.core.godot").setup()
+require("engine.core.holyc").setup()
+require("engine.core.dotnet").setup()
+require("engine.core.php").setup()
 require("engine.tools").setup()

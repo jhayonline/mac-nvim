@@ -76,8 +76,28 @@ return {
             return split_args(vim.fn.input("Program arguments: "))
         end
 
-        local lldb_dap = vim.fn.exepath("lldb-dap")
-        local codelldb = vim.fn.exepath("codelldb")
+        -- Mason installs into its own bin directory, which is deliberately
+        -- not on $PATH, so exepath() alone never found codelldb -- which is
+        -- why this file has been warning "No C/C++ DAP adapter found" on
+        -- every startup even after installing one. Check Mason too.
+        local mason_bin = vim.fn.stdpath("data") .. "/mason/bin"
+
+        local function find_adapter(name)
+            local on_path = vim.fn.exepath(name)
+            if on_path ~= "" then
+                return on_path
+            end
+
+            local in_mason = mason_bin .. "/" .. name
+            if is_executable(in_mason) then
+                return in_mason
+            end
+
+            return ""
+        end
+
+        local lldb_dap = find_adapter("lldb-dap")
+        local codelldb = find_adapter("codelldb")
 
         -----------------------------------------------------------------------
         -- Adapter setup
@@ -136,7 +156,113 @@ return {
 
         dap.configurations.cpp = cpp_configurations
         dap.configurations.c = cpp_configurations
+        -- Rust debugging goes through rustaceanvim (`:RustLsp debuggables`),
+        -- which builds the target first and knows about test harnesses and
+        -- workspace members. These plain-executable configurations remain as
+        -- a fallback for a binary you already have on disk.
         dap.configurations.rust = cpp_configurations
+
+        -----------------------------------------------------------------------
+        -- .NET / C# via netcoredbg
+        -----------------------------------------------------------------------
+        -- netcoredbg speaks DAP directly (`--interpreter=vscode`), so no
+        -- adapter shim is needed. Installed with :MasonInstall netcoredbg.
+        local netcoredbg = vim.fn.exepath("netcoredbg")
+        if netcoredbg == "" then
+            local mason_netcoredbg = vim.fn.stdpath("data") .. "/mason/bin/netcoredbg"
+            if is_executable(mason_netcoredbg) then
+                netcoredbg = mason_netcoredbg
+            end
+        end
+
+        if netcoredbg ~= "" then
+            dap.adapters.coreclr = {
+                type = "executable",
+                command = netcoredbg,
+                args = { "--interpreter=vscode" },
+            }
+
+            -- Find the built assembly for the project the buffer belongs to.
+            -- `dotnet build` writes bin/<config>/<tfm>/<AssemblyName>.dll, and
+            -- the TFM changes with every SDK bump, so glob rather than guess.
+            local function pick_dotnet_dll()
+                local dotnet = require("engine.core.dotnet")
+                local csproj = dotnet.project()
+
+                if not csproj then
+                    return vim.fn.input("Path to dll: ", vim.fn.getcwd() .. "/", "file")
+                end
+
+                local project_dir = vim.fs.dirname(csproj)
+                local assembly = dotnet.msbuild_property(csproj, "AssemblyName")
+                    or vim.fn.fnamemodify(csproj, ":t:r")
+
+                -- Debug before Release: you are debugging, after all.
+                for _, config in ipairs({ "Debug", "Release" }) do
+                    local hits = vim.fn.glob(
+                        project_dir .. "/bin/" .. config .. "/*/" .. assembly .. ".dll",
+                        false,
+                        true
+                    )
+                    if #hits > 0 then
+                        -- Newest wins when several target frameworks are built.
+                        table.sort(hits, function(a, b)
+                            local sa = vim.uv.fs_stat(a)
+                            local sb = vim.uv.fs_stat(b)
+                            return (sa and sa.mtime.sec or 0) > (sb and sb.mtime.sec or 0)
+                        end)
+                        vim.notify("DAP launching " .. hits[1], vim.log.levels.INFO)
+                        return hits[1]
+                    end
+                end
+
+                vim.notify(
+                    "No built assembly under " .. project_dir .. "/bin -- run :DotnetBuild first",
+                    vim.log.levels.WARN
+                )
+                return vim.fn.input("Path to dll: ", project_dir .. "/bin/", "file")
+            end
+
+            dap.configurations.cs = {
+                {
+                    name = "Launch",
+                    type = "coreclr",
+                    request = "launch",
+                    program = pick_dotnet_dll,
+                    cwd = "${workspaceFolder}",
+                    stopAtEntry = false,
+                },
+                {
+                    -- ASP.NET needs Development to pick up appsettings.
+                    -- Development.json, user secrets and the dev exception page.
+                    name = "Launch (ASP.NET Development)",
+                    type = "coreclr",
+                    request = "launch",
+                    program = pick_dotnet_dll,
+                    cwd = "${workspaceFolder}",
+                    stopAtEntry = false,
+                    env = {
+                        ASPNETCORE_ENVIRONMENT = "Development",
+                        DOTNET_ENVIRONMENT = "Development",
+                    },
+                },
+                {
+                    -- For attaching to an already-running `dotnet watch`.
+                    name = "Attach to process",
+                    type = "coreclr",
+                    request = "attach",
+                    processId = require("dap.utils").pick_process,
+                },
+            }
+
+            dap.configurations.razor = dap.configurations.cs
+            dap.configurations.fsharp = dap.configurations.cs
+        else
+            vim.notify(
+                "netcoredbg not found -- run :MasonInstall netcoredbg for C# debugging.",
+                vim.log.levels.WARN
+            )
+        end
 
         -----------------------------------------------------------------------
         -- Keybindings

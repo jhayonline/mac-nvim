@@ -413,15 +413,24 @@ local function is_header_extension(ext)
 	return vim.tbl_contains(HEADER_EXTENSIONS, ext)
 end
 
-function M.insert()
+---@param kind? string explicit template name (C# only; C++ is inferred from the extension)
+function M.insert(kind)
 	local ext = vim.fn.expand("%:e")
 	local ns = project_namespace()
 	local cls = filename_stem()
 	local name = filename()
 	local file_path = current_file_path()
 	local lines
+	local cursor
 
-	if is_header_extension(ext) then
+	-- C# templates are involved enough (namespace from the .csproj, kind from
+	-- the filename convention) to live in their own module.
+	if ext == "cs" or ext == "csx" then
+		lines, cursor = require("engine.tools.skeleton_csharp").build(kind)
+		if not lines then
+			return
+		end
+	elseif is_header_extension(ext) then
 		lines = {
 			"#pragma once",
 			"",
@@ -451,12 +460,37 @@ function M.insert()
 			"",
 			"}",
 		}
+	elseif ext == "html" or ext == "htm" then
+		lines = {
+			"<!doctype html>",
+			'<html lang="en">',
+			"  <head>",
+			'    <meta charset="UTF-8" />',
+			'    <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+			"    <title>Document</title>",
+			"  </head>",
+			"  <body></body>",
+			"</html>",
+		}
 	else
 		vim.notify("Skel: unsupported file type", vim.log.levels.WARN)
 		return
 	end
 
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+
+	if cursor then
+		vim.api.nvim_win_set_cursor(0, { math.min(cursor, #lines), #(lines[cursor] or "") })
+	end
+end
+
+---Template names :Skel accepts for the current buffer, for command completion.
+function M.completions()
+	local ext = vim.fn.expand("%:e")
+	if ext == "cs" or ext == "csx" then
+		return require("engine.tools.skeleton_csharp").kinds
+	end
+	return {}
 end
 
 return M

@@ -27,7 +27,19 @@ return {
       renderer = {
         highlight_opened_files = "all",
       },
-      git = { enable = false },
+      -- Git status in the tree: a colour and a badge per file, and the
+      -- parent folders of anything modified. This was off, which meant the
+      -- tree gave no hint that a file had uncommitted work in it.
+      git = {
+        enable = true,
+        show_on_dirs = true,
+        show_on_open_dirs = false,
+        timeout = 500,
+      },
+      modified = {
+        enable = true,
+        show_on_dirs = true,
+      },
       tab = {
         sync = {
           open = false,

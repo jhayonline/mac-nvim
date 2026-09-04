@@ -34,9 +34,24 @@ function M.setup()
 	})
 
 	-- :Skel command
-	vim.api.nvim_create_user_command("Skel", function()
-		require("engine.tools.skeleton").insert()
-	end, {})
+	--
+	-- With no argument the template is inferred: from the extension for C/C++
+	-- (header vs. translation unit), and from the filename convention for C#
+	-- (IFoo -> interface, FooController -> controller, FooDbContext -> EF
+	-- context, FooTests -> xunit class, ...). Pass a name to override it --
+	-- :Skel record, :Skel apicontroller, :Skel middleware. <Tab> lists the
+	-- templates valid for the current buffer.
+	vim.api.nvim_create_user_command("Skel", function(cmd)
+		require("engine.tools.skeleton").insert(cmd.args ~= "" and cmd.args or nil)
+	end, {
+		nargs = "?",
+		desc = "Replace the buffer with a skeleton for its file type",
+		complete = function(arg_lead)
+			return vim.tbl_filter(function(kind)
+				return kind:find(arg_lead, 1, true) == 1
+			end, require("engine.tools.skeleton").completions())
+		end,
+	})
 
 	-- :TypstPreview command
 	vim.api.nvim_create_user_command("TypstPreview", function()

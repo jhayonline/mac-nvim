@@ -51,6 +51,12 @@ vim.api.nvim_create_autocmd("FileType", {
 
 vim.filetype.add({
 	extension = {
+		-- Neovim has no Mojo filetype yet, and Mojo accepts either extension --
+		-- the fire emoji is the canonical one upstream. Without this, mojo-lsp
+		-- (engine.plugins.lsp.lspconfig) has no filetype to attach to.
+		mojo = "mojo",
+		["\u{1F525}"] = "mojo",
+
 		gd = "gdscript",
 		gdshader = "gdshader",
 		gdshaderinc = "gdshaderinc",

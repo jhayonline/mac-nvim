@@ -35,8 +35,8 @@ return {
 	opts = {
 		-- Hand file watching to the server rather than Neovim's libuv watcher.
 		-- Roslyn's own watcher is what the plugin's :checkhealth rates "ok"
-		-- (Neovim's only rates "info"), it does not walk bin/ and obj/ from
-		-- Lua on a 4-core Haswell, and it avoids the one-off
+		-- (Neovim's only rates "info"), it avoids walking bin/ and obj/ from
+		-- Lua, and it avoids the one-off
 		-- "watch.watch: ENOENT" notice Neovim emits when Roslyn asks it to
 		-- watch a directory the build has not created yet.
 		filewatching = "roslyn",

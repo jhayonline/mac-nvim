@@ -413,7 +413,7 @@ local function is_header_extension(ext)
 	return vim.tbl_contains(HEADER_EXTENSIONS, ext)
 end
 
----@param kind? string explicit template name (C# only; C++ is inferred from the extension)
+---@param kind? string explicit template name (C# and Java only; C++ is inferred from the extension)
 function M.insert(kind)
 	local ext = vim.fn.expand("%:e")
 	local ns = project_namespace()
@@ -423,10 +423,16 @@ function M.insert(kind)
 	local lines
 	local cursor
 
-	-- C# templates are involved enough (namespace from the .csproj, kind from
-	-- the filename convention) to live in their own module.
+	-- C# and Java templates are involved enough (namespace/package resolved
+	-- from the project layout, kind from the filename convention) to live in
+	-- their own modules.
 	if ext == "cs" or ext == "csx" then
 		lines, cursor = require("engine.tools.skeleton_csharp").build(kind)
+		if not lines then
+			return
+		end
+	elseif ext == "java" then
+		lines, cursor = require("engine.tools.skeleton_java").build(kind)
 		if not lines then
 			return
 		end
@@ -489,6 +495,9 @@ function M.completions()
 	local ext = vim.fn.expand("%:e")
 	if ext == "cs" or ext == "csx" then
 		return require("engine.tools.skeleton_csharp").kinds
+	end
+	if ext == "java" then
+		return require("engine.tools.skeleton_java").kinds
 	end
 	return {}
 end

@@ -286,7 +286,7 @@ syn keyword holycStdConstant __MUTEX_LOCK_ATTR_SIZE__
 syn keyword holycStdConstant __MUTEX_LOCK_PADDING__ __THREAD_ATTR_SIZE__
 syn keyword holycStdConstant __THREAD_CONDATTR_SIZE__ __THREAD_COND_SIZE__
 syn keyword holycStdConstant __THREAD_SIZE__ __TIMESTAMP__ __TIME__
-syn keyword holycStdConstant __macos__ __x86_64__
+syn keyword holycStdConstant __macos__ __aarch64__ __arm64__ __x86_64__
 
 syn keyword holycStdVariable Fs argc argv
 

@@ -156,10 +156,8 @@ return {
 
         dap.configurations.cpp = cpp_configurations
         dap.configurations.c = cpp_configurations
-        -- Rust debugging goes through rustaceanvim (`:RustLsp debuggables`),
-        -- which builds the target first and knows about test harnesses and
-        -- workspace members. These plain-executable configurations remain as
-        -- a fallback for a binary you already have on disk.
+		-- Rust uses the same plain CodeLLDB configurations as C/C++ now that
+		-- rustaceanvim is disabled. Build the target with Cargo first.
         dap.configurations.rust = cpp_configurations
 
         -----------------------------------------------------------------------

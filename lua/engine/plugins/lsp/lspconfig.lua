@@ -47,7 +47,7 @@ return {
 				end
 
 				opts.desc = "show lsp references"
-				keymap.set("n", "gr", "<cmd>telescope lsp_references<cr>", opts)
+				keymap.set("n", "gr", "<cmd>Telescope lsp_references<cr>", opts)
 
 				opts.desc = "go to declaration"
 				keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
@@ -56,10 +56,10 @@ return {
 				keymap.set("n", "gd", vim.lsp.buf.definition, opts)
 
 				opts.desc = "show lsp implementations"
-				keymap.set("n", "gi", "<cmd>telescope lsp_implementations<cr>", opts)
+				keymap.set("n", "gi", "<cmd>Telescope lsp_implementations<cr>", opts)
 
 				opts.desc = "show lsp type definitions"
-				keymap.set("n", "gt", "<cmd>telescope lsp_type_definitions<cr>", opts)
+				keymap.set("n", "gt", "<cmd>Telescope lsp_type_definitions<cr>", opts)
 
 				opts.desc = "see available code actions"
 				keymap.set({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action, opts)
@@ -68,7 +68,7 @@ return {
 				keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
 
 				opts.desc = "show buffer diagnostics"
-				keymap.set("n", "<leader>d", "<cmd>telescope diagnostics bufnr=0<cr>", opts)
+				keymap.set("n", "<leader>dd", "<cmd>Telescope diagnostics bufnr=0<cr>", opts)
 
 				opts.desc = "show line diagnostics"
 				keymap.set("n", "<leader>dl", vim.diagnostic.open_float, opts)
@@ -83,7 +83,30 @@ return {
 				keymap.set("n", "K", vim.lsp.buf.hover, opts) -- Changed to Shift+K
 
 				opts.desc = "restart lsp"
-				keymap.set("n", "<leader>rs", ":lsprestart<cr>", opts)
+				keymap.set("n", "<leader>rs", function()
+					local bufnr = vim.api.nvim_get_current_buf()
+					local clients = vim.lsp.get_clients({ bufnr = bufnr })
+					if #clients == 0 then
+						vim.notify("no language server attached to this buffer", vim.log.levels.WARN)
+						return
+					end
+
+					local names = {}
+					for _, lsp in ipairs(clients) do
+						names[#names + 1] = lsp.name
+						lsp:stop()
+					end
+					vim.notify("restarting " .. table.concat(names, ", "), vim.log.levels.INFO)
+
+					-- Roslyn in particular takes a moment to actually exit, and
+					-- re-attaching while the old client is still shutting down
+					-- gets you two servers on the buffer.
+					vim.defer_fn(function()
+						if vim.api.nvim_buf_is_valid(bufnr) then
+							vim.api.nvim_exec_autocmds("FileType", { buffer = bufnr })
+						end
+					end, 1000)
+				end, opts)
 
 				-- enable inlay hints if supported
 				local client = vim.lsp.get_client_by_id(ev.data.client_id)
@@ -142,7 +165,7 @@ return {
 		end
 
 		-- ============================
-		-- typescript / react (tsx)
+		-- typescript / react / vue / nuxt
 		-- ============================
 		-- Inlay hints and the import preferences are the two things that make
 		-- this feel like a real TS editor rather than a completion popup. The
@@ -170,16 +193,10 @@ return {
 			quotePreference = "auto",
 		}
 
-		vim.lsp.config("ts_ls", {
+		require("engine.lsp.vue").setup({
 			capabilities = capabilities,
 			on_attach = enable_inlay_hints,
-			filetypes = {
-				"typescript",
-				"typescriptreact",
-				"javascript",
-				"javascriptreact",
-			},
-			settings = {
+			ts_settings = {
 				typescript = {
 					inlayHints = ts_inlay_hints,
 					preferences = ts_preferences,
@@ -197,8 +214,6 @@ return {
 				completions = { completeFunctionCalls = true },
 			},
 		})
-
-		vim.lsp.enable("ts_ls")
 
 		-- ============================
 		-- tailwind css
@@ -331,13 +346,14 @@ return {
 		-- ============================
 		-- clang
 		-- ============================
+		local query_drivers = table.concat(require("engine.core.macos").clang_query_drivers(), ",")
 		vim.lsp.config("clangd", {
 			capabilities = capabilities,
 			cmd = {
 				"clangd",
 				"--background-index",
 				"--clang-tidy",
-				"--query-driver=/usr/bin/c++,/usr/bin/g++",
+				"--query-driver=" .. query_drivers,
 			},
 			init_options = {
 				fallbackflags = {
@@ -401,11 +417,8 @@ return {
 		-- ============================
 		-- rust
 		-- ============================
-		-- rust_analyzer is owned by rustaceanvim (engine.plugins.rust), which
-		-- starts and configures the server itself and adds :RustLsp on top --
-		-- runnables, debuggables, macro expansion, HIR/MIR views. Enabling it
-		-- here as well would start a second client on every Rust buffer, so
-		-- the configuration lives there, not here.
+		-- Rust intentionally has no resident LSP. Formatting is handled by
+		-- conform.nvim and checks can be run manually with Cargo.
 
 		-- ============================
 		-- typst
@@ -432,6 +445,14 @@ return {
 
 			vim.lsp.enable("hls")
 		end
+
+		-- Odin Language Server locates projects from ols.json, .git, or the
+		-- nearest .odin file and resolves the SDK through `odin root`.
+		vim.lsp.config("ols", {
+			capabilities = capabilities,
+			filetypes = { "odin" },
+		})
+		vim.lsp.enable("ols")
 
 		-- ============================
 		-- godot / gdscript
@@ -489,11 +510,19 @@ return {
 		vim.lsp.enable("pyright")
 
 		-- ============================
-		-- java (already configured in java.lua via opts.servers —
-		-- do not enable jdtls here too, or it'll be set up twice)
+		-- java
 		-- ============================
-		-- vim.lsp.config("jdtls", { capabilities = capabilities })
-		-- vim.lsp.enable("jdtls")
+		-- jdtls is owned by nvim-jdtls: the plugin spec is in
+		-- engine.plugins.java and it is started, once per project root, from
+		-- ftplugin/java.lua. Enabling it here as well would put a second --
+		-- and bundle-less, so debug- and test-incapable -- server on every
+		-- Java buffer, which is why it is also excluded from
+		-- mason-lspconfig's automatic_enable in lsp/mason.lua.
+		--
+		-- (This comment previously claimed the configuration lived in a
+		-- "java.lua ... via opts.servers". No such file existed, and jdtls was
+		-- in fact running on bare lspconfig defaults with no workspace and no
+		-- bundles.)
 
 		-- ============================
 		-- c# (already configured in your omnisharp plugin file via
@@ -667,6 +696,66 @@ return {
 		end
 
 		-- ============================
+		-- glsl (shaders)
+		-- ============================
+		-- glsl_analyzer gives completion over the whole GL builtin set, hover
+		-- with the spec wording, and -- the part that matters -- diagnostics
+		-- from a real GLSL parse. Before this, a typo in a shader was only
+		-- discovered at run time, as a black screen and a compile log in the
+		-- terminal.
+		--
+		-- The upstream config lists the bare extensions ("vert", "frag", ...)
+		-- as filetypes, which is not how they arrive here: engine.core.graphics
+		-- maps every shader extension to the single `glsl` filetype, so the
+		-- treesitter parser and this server agree on one name.
+		vim.lsp.config("glsl_analyzer", {
+			capabilities = capabilities,
+			filetypes = { "glsl" },
+			-- A loose shader outside a repo should still get a server rather
+			-- than dropping to single-file mode with no includes resolved.
+			root_dir = function(bufnr, on_dir)
+				local name = vim.api.nvim_buf_get_name(bufnr)
+				on_dir(
+					vim.fs.root(bufnr, { "shaders", "CMakeLists.txt", ".git" })
+						or (name ~= "" and vim.fs.dirname(name))
+						or vim.uv.cwd()
+				)
+			end,
+		})
+		vim.lsp.enable("glsl_analyzer")
+
+		-- ============================
+		-- wgsl (Bevy / wgpu shaders)
+		-- ============================
+		-- Bevy's shaders are WGSL, not GLSL, and its custom-material examples
+		-- are all .wgsl -- so this is the server you want open whenever you go
+		-- past StandardMaterial.
+		vim.lsp.config("wgsl_analyzer", {
+			capabilities = capabilities,
+			filetypes = { "wgsl" },
+			root_markers = { "Cargo.toml", ".git" },
+		})
+		vim.lsp.enable("wgsl_analyzer")
+
+		-- ============================
+		-- cmake
+		-- ============================
+		-- neocmakelsp over cmake-language-server: it does completion for
+		-- commands and variables, go-to-definition across add_subdirectory,
+		-- and formatting, where the older server does little more than hover.
+		--
+		-- It only offers completion when the client advertises snippet
+		-- support. `capabilities` here comes from cmp-nvim-lsp, which does
+		-- advertise it, so there is nothing extra to set -- but that is why
+		-- the upstream docs make a point of it.
+		vim.lsp.config("neocmake", {
+			capabilities = capabilities,
+			filetypes = { "cmake" },
+			root_markers = { "CMakeLists.txt", "CMakePresets.json", ".git" },
+		})
+		vim.lsp.enable("neocmake")
+
+		-- ============================
 		-- zig
 		-- ============================
 		vim.lsp.config("zls", {
@@ -674,5 +763,35 @@ return {
 			filetypes = { "zig", "zir" },
 		})
 		vim.lsp.enable("zls")
+
+		-- ============================
+		-- mojo
+		-- ============================
+		-- mojo-lsp-server ships with the Mojo toolchain rather than through
+		-- Mason, which has no Mojo package -- it lands in ~/.pixi/bin alongside
+		-- `mojo` itself. Guarded like hcc above, so a machine without the
+		-- toolchain just does not get the server instead of erroring on startup.
+		--
+		-- Filetype detection for .mojo and .🔥 is in engine.core.options; nothing
+		-- in Neovim knows the extensions natively yet.
+		if vim.fn.executable("mojo-lsp-server") == 1 then
+			vim.lsp.config("mojo", {
+				capabilities = capabilities,
+				cmd = { "mojo-lsp-server" },
+				filetypes = { "mojo" },
+				-- mojoproject.toml/pixi.toml is a Mojo package root; fall back to
+				-- the file's own directory so a loose .mojo still gets a root
+				-- rather than dropping to single-file mode.
+				root_dir = function(bufnr, on_dir)
+					local name = vim.api.nvim_buf_get_name(bufnr)
+					on_dir(
+						vim.fs.root(bufnr, { "mojoproject.toml", "pixi.toml", ".git" })
+							or (name ~= "" and vim.fs.dirname(name))
+							or vim.uv.cwd()
+					)
+				end,
+			})
+			vim.lsp.enable("mojo")
+		end
 	end,
 }

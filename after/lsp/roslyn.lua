@@ -50,6 +50,30 @@ return {
 		if client:supports_method("textDocument/inlayHint") then
 			vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
 		end
+
+		-- Code lens: reference counts above each member.
+		--
+		-- Asking the server for lenses is only half of it -- Neovim renders
+		-- nothing until code lens is enabled for the buffer, and nothing in this
+		-- config did it, so Roslyn was computing lenses on every edit that were
+		-- then dropped on the floor.
+		--
+		-- These are informational, not clickable. This server advertises an empty
+		-- `executeCommandProvider`, and the reference lens carries no command at
+		-- all, so there is deliberately no keymap to "run" one -- see the note on
+		-- test lenses in the settings below.
+		--
+		-- Scoped to C# rather than put in the shared LspAttach handler because
+		-- Roslyn is the only server here configured to produce lenses.
+		--
+		-- `enable` goes through the same vim.lsp._capability machinery as
+		-- inlay_hint.enable above, so it re-requests on its own as the buffer
+		-- changes. (vim.lsp.codelens.refresh() needs hand-written
+		-- BufEnter/CursorHold/InsertLeave autocmds, and is deprecated for
+		-- removal in 0.13.)
+		if client:supports_method("textDocument/codeLens") then
+			vim.lsp.codelens.enable(true, { bufnr = bufnr })
+		end
 	end,
 
 	settings = {
@@ -70,10 +94,27 @@ return {
 		},
 
 		["csharp|code_lens"] = {
-			-- Reference counts above members, and a run/debug lens above
-			-- [Fact] / [Test] methods.
+			-- Reference counts above members. Informational only, but worth
+			-- having: "0 references" over a method you thought was wired up
+			-- is the cheapest dead-code check there is.
 			dotnet_enable_references_code_lens = true,
-			dotnet_enable_tests_code_lens = true,
+
+			-- Test lenses are OFF, and this is deliberate.
+			--
+			-- Roslyn emits "Run Test" / "Debug Test" / "Run All Tests" lenses
+			-- whose command is `dotnet.test.run` -- a **VS Code** command,
+			-- contributed by the C# extension, not an LSP one. Verified on
+			-- this machine: the server advertises an empty
+			-- executeCommandProvider, roslyn.nvim implements only
+			-- fixAllCodeAction / nestedCodeAction / completionComplexEdit, and
+			-- nothing else handles `dotnet.test.run`. So with these on you get
+			-- four lenses per test file that render, offer themselves in a
+			-- picker, and then do nothing at all.
+			--
+			-- `:DotnetTestHere` (engine.core.dotnet) is the working
+			-- equivalent: it runs the test under the cursor through
+			-- `dotnet test --filter`, which needs no editor integration.
+			dotnet_enable_tests_code_lens = false,
 		},
 
 		["csharp|completion"] = {
@@ -90,9 +131,9 @@ return {
 			-- instead of only when you open the file.
 			dotnet_compiler_diagnostics_scope = "fullSolution",
 			-- Analyzers (the IDExxxx / CAxxxx style and quality rules) stay on
-			-- open files -- solution-wide analysis is the expensive half, and
-			-- this is a 4-core Haswell. Raise to "fullSolution" if you want
-			-- them everywhere and can spare the CPU.
+			-- open files -- solution-wide analysis is the expensive half. Raise
+			-- to "fullSolution" if you want them everywhere and can spare the
+			-- extra background work.
 			dotnet_analyzer_diagnostics_scope = "openFiles",
 		},
 

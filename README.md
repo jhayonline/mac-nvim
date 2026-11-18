@@ -16,10 +16,10 @@ A focused Neovim setup for day-to-day coding, with fast navigation, LSP-backed e
 
 - Plugin management through [lazy.nvim](https://github.com/folke/lazy.nvim), bootstrapped automatically on first launch.
 - Fuzzy finding, live grep, references, implementations, and diagnostics through Telescope.
-- LSP setup for TypeScript, C/C++, Lua, Rust, Typst, Haskell, GDScript, and Godot shader files.
+- LSP setup for Vue/Nuxt, TypeScript, Java, C/C++, C#/Razor, Lua, Typst, Haskell, shaders, GDScript, Odin, Zig, and more.
 - Completion with `nvim-cmp`, LuaSnip snippets, path suggestions, buffer words, and LSP sources.
-- Treesitter highlighting for web, systems, scripting, markdown, Haskell, C#, Rust, PHP/Blade and Godot filetypes.
-- Debugging through `nvim-dap`: C/C++/Rust via CodeLLDB, C# via netcoredbg, Rust also via `:RustLsp debuggables`.
+- Treesitter highlighting for web, systems, scripting, markdown, Haskell, C#/Razor, Rust, PHP/Blade and Godot filetypes.
+- Debugging through `nvim-dap`: C/C++/Rust via CodeLLDB and C# via netcoredbg.
 - Format on save through `conform`, with the project-local formatter preferred over the global one.
 - Git and GitHub: inline blame (GitLens-style), hunk staging, lazygit, diffview, and pull
   requests/issues through `octo`. See [`doc/git.md`](doc/git.md).
@@ -30,9 +30,9 @@ Four stacks are set up end to end, each with its own document:
 
 | Stack | Highlights | Docs |
 | --- | --- | --- |
-| C# / .NET | Roslyn LSP, `:Dotnet*` and `:Ef*` commands, CSharpier, netcoredbg, C# `:Skel` templates | [`doc/csharp.md`](doc/csharp.md) |
-| React + TypeScript + Tailwind | `ts_ls`, Tailwind, ESLint, Emmet, prettier with class sorting | [`doc/frontend.md`](doc/frontend.md) |
-| Rust | rustaceanvim, Clippy on save, `crates.nvim`, CodeLLDB debugging | [`doc/rust.md`](doc/rust.md) |
+| C# / ASP.NET Core MVC | Roslyn LSP (C# **and** Razor), `:Dotnet*` / `:Ef*` / `:Mvc*` commands, CRUD scaffolding, controller↔view jumps, CSharpier, netcoredbg, C# `:Skel` templates | [`doc/csharp.md`](doc/csharp.md) · how-to: [`doc/CsToolUse.md`](doc/CsToolUse.md) |
+| Vue 3 / Nuxt 4 + React / TypeScript | `vue_ls` + Vue-aware `ts_ls`, Tailwind, ESLint, Emmet, prettier, Treesitter | [`doc/frontend.md`](doc/frontend.md) |
+| Rust | rustfmt on save, `crates.nvim`, CodeLLDB debugging, manual Cargo checks | [`doc/rust.md`](doc/rust.md) |
 | PHP (Laravel **and** vanilla) | intelephense with framework stubs, Blade, `:Artisan*`, `:Php*`, Pint | [`doc/php.md`](doc/php.md) |
 - A custom theme picker with persisted selection and quick next/previous theme commands.
 - Practical UI touches: file tree, bufferline, lualine, diagnostics, folds, markdown rendering, and quality-of-life editing plugins.
@@ -42,7 +42,7 @@ Four stacks are set up end to end, each with its own document:
 Back up your existing config first, then clone this repo into Neovim's config directory:
 
 ```sh
-git clone git@github.com:jhayonline/nvim.git ~/.config/nvim
+git clone git@github.com:jhayonline/mac-nvim.git ~/.config/nvim
 nvim
 ```
 
@@ -50,26 +50,47 @@ On first launch, `lazy.nvim` installs itself and then installs the configured pl
 
 ### External tools
 
-Some features work best when these tools are available on your `PATH`:
+This config targets Apple Silicon. Install Homebrew in its standard
+`/opt/homebrew` prefix, then make sure the tools needed by the stacks you use
+are available:
 
 - `git`, `make`, and a C compiler for native plugin builds.
-- Language servers such as `clangd`, `rust-analyzer`, `lua-language-server`, `tinymist`, and `haskell-language-server-wrapper`.
+- Language servers such as `clangd`, `lua-language-server`, `tinymist`, and `haskell-language-server-wrapper`.
 - `lldb-dap` or `codelldb` for debugging C, C++, and Rust.
 - `gdshader-lsp` for Godot shader support.
-- The .NET SDK plus the `roslyn-language-server`, `csharpier` and `dotnet-ef` global tools, and
-  `netcoredbg`, for C#.
-- `node`/`npm` and `prettier` for the React/TypeScript stack.
+- For C#: the native arm64 .NET SDK (which includes the ASP.NET Core runtime
+  and targeting packs), the `roslyn-language-server`, `csharpier`, `dotnet-ef`
+  and `dotnet-aspnet-codegenerator` global tools, and `netcoredbg`.
+  See [`doc/csharp.md`](doc/csharp.md#installing-from-scratch) for the exact commands.
+- `node`/`npm` and project-local `typescript`, `vue-tsc`, ESLint and Prettier for the Vue/Nuxt and React/TypeScript stack. Mason installs the editor language servers.
 - `rustup` (cargo, clippy, rustfmt) and `codelldb` for Rust.
+- A native arm64 JDK (Java 21 by default), plus Mason's `jdtls`,
+  `java-debug-adapter`, and `java-test` packages for Java.
+- `glslangValidator`, `clang-format`, and `gersemi` for shader/CMake checks and formatting.
 - PHP 8.4, Composer and the Laravel installer for PHP work.
 - `git`, `gh`, `lazygit`, `delta`, `rg` and `fd` for version control and search.
 
-All of these are already installed; each stack's document lists exact versions, install
-locations and how to reinstall them.
+Nothing here assumes those tools are already installed on the new Mac. Lazy
+and Mason handle editor plugins and language servers; each stack document
+separates those from Homebrew, official SDK, and project-local dependencies.
 
-> **Homebrew note:** Homebrew has moved Intel macOS to Tier 3 and no longer ships prebuilt
-> bottles for it, so `brew install <formula>` may fail with `no bottle available!` and need
-> either a tap that publishes its own bottles or a source build. This is how PHP ended up
-> coming from the `shivammathur/php` tap.
+### First launch on the M5
+
+1. Install Xcode Command Line Tools, Homebrew, and a native arm64 Neovim.
+2. Install the stack runtimes you need. For Java 21, `brew install openjdk@21`
+   is one path the config discovers automatically; .NET and PHP are covered in
+   their linked stack guides.
+3. Start Neovim, run `:Lazy sync`, open `:Mason`, and run `:checkhealth`.
+4. Java debugging/tests and native debugging use Mason packages that are not
+   language servers, so install them explicitly when needed:
+
+   ```vim
+   :MasonInstall java-debug-adapter java-test codelldb netcoredbg
+   ```
+
+5. Open representative `.vue`, `.java`, `.cs`, `.cshtml`, `.php`, `.glsl`,
+   and `.wgsl` files. Check `:LspInfo`, `:FormatInfo`, `:DotnetInfo`, Java test
+   actions, and `:ShaderCheck` before copying projects onto the machine.
 
 ## Keybindings
 
@@ -98,8 +119,6 @@ Leader is `<Space>`.
 | `<leader>dc` | Continue debugger |
 | `<leader>db` | Toggle breakpoint |
 | `<leader>ds`, `<leader>di`, `<leader>do` | Step over / into / out |
-| `<leader>rr`, `<leader>rd`, `<leader>rt` | Rust runnables / debuggables / testables |
-| `<leader>rm`, `<leader>re`, `<leader>rc` | Rust expand macro / explain error / open Cargo.toml |
 | `<leader>gb` / `<leader>gL` | Blame this line / blame the whole file |
 | `<leader>gg` | Lazygit |
 | `<leader>gs` / `<leader>gr` | Stage / reset hunk (works on a visual selection) |
@@ -112,13 +131,16 @@ Leader is `<Space>`.
 
 | Command | Action |
 | --- | --- |
-| `:Skel [template]` | Replace the buffer with a skeleton for its file type (C/C++ and C#) |
+| `:Skel [template]` | Replace the buffer with a skeleton for its file type (C/C++, C#, Java and HTML) |
 | `:DotnetBuild`, `:DotnetRun`, `:DotnetWatch`, `:DotnetTest` | .NET build and run, results in the quickfix list |
+| `:DotnetTestHere` | Run only the C# test under the cursor |
+| `:MvcCrud`, `:MvcScaffold` | Scaffold an ASP.NET Core MVC CRUD controller and its views from an EF model |
+| `:MvcAlternate` | Jump between a controller action and its Razor view |
+| `:DotnetSecrets`, `:DotnetDevCerts` | ASP.NET user secrets and the HTTPS development certificate |
 | `:EfAdd`, `:EfUpdate`, `:EfList`, … | EF Core migrations |
 | `:Artisan*` | Laravel artisan, with real `<Tab>` completion from the app |
 | `:PhpRun`, `:PhpLint`, `:PhpServe`, `:PhpTest`, `:PhpRepl` | Vanilla PHP — no Laravel needed |
 | `:Composer`, `:Pint` | Composer commands and Laravel Pint |
-| `:RustLsp runnables` / `debuggables` / `expandMacro` | rust-analyzer extensions (buffer-local, Rust files) |
 | `:Format`, `:FormatToggle`, `:FormatInfo` | Format now, toggle format-on-save, show active formatters |
 | `:DotnetInfo`, `:LaravelInfo` | Show the resolved project context for the current buffer |
 | `:TypstPreview` | Open the compiled PDF for the current Typst file |

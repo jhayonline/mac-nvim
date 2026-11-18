@@ -29,22 +29,18 @@ local uv = vim.uv or vim.loop
 -- Environment
 -- ---------------------------------------------------------------------------
 
--- PHP from the shivammathur tap is keg-only, so it is never on $PATH by
--- default, and Composer's global bin (which holds the `laravel` installer) is
--- not either. nvim started from a GUI launcher never reads .zshrc, so patch
--- both in here the way engine.core.dotnet does for the .NET SDK.
+-- Neither keg-only Homebrew PHP nor Composer's global bin (which is where the
+-- `laravel` installer lands) is reliably on $PATH in a GUI-launched Neovim.
+-- Patch both in here the way engine.core.dotnet does for the .NET SDK.
+--
+-- Candidates are ordered most-specific first. Iterate backwards while
+-- prepending so Apple Silicon Homebrew stays ahead of compatibility paths.
 local function bootstrap_path()
-	local candidates = {
-		"/usr/local/opt/php@8.4/bin",
-		"/usr/local/opt/php/bin",
-		"/opt/homebrew/opt/php@8.4/bin",
-		"/opt/homebrew/opt/php/bin",
-		vim.fn.expand("~/.composer/vendor/bin"),
-		vim.fn.expand("~/.config/composer/vendor/bin"),
-	}
+	local candidates = require("engine.core.macos").php_bin_dirs()
 
 	local path = vim.env.PATH or ""
-	for _, dir in ipairs(candidates) do
+	for index = #candidates, 1, -1 do
+		local dir = candidates[index]
 		if uv.fs_stat(dir) and not (":" .. path .. ":"):find(":" .. dir .. ":", 1, true) then
 			path = dir .. ":" .. path
 		end

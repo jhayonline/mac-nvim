@@ -16,11 +16,12 @@ setlocal cindent
 setlocal cinoptions=:0,l1,t0,g0,(0
 
 " `gf` and `[i` over #include lines. hcc resolves headers from
-" <install-dir>/include, which defaults to /usr/local.
+" <install-dir>/include. Prefer Apple Silicon Homebrew and retain the
+" traditional /usr/local location for manual hcc installs.
 setlocal include=^\\s*#\\s*include
 setlocal define=^\\s*#\\s*define
 setlocal suffixesadd=.HC,.HH
-setlocal path+=/usr/local/include
+setlocal path+=/opt/homebrew/include,/usr/local/include
 
 let b:undo_ftplugin = "setlocal commentstring< comments< cindent< cinoptions<"
       \ . " include< define< suffixesadd< path<"

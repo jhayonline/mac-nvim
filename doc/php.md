@@ -18,48 +18,36 @@ diagnostics, `php -l` checking and format-on-save.
 
 ---
 
-## What is installed, and where
+## What to install, and where it lives
 
-| Component | Version | Location |
+| Component | Install with | Expected location |
 | --- | --- | --- |
-| PHP | 8.4.25 | `/usr/local/opt/php@8.4/bin` (keg-only) |
-| Composer | 2.10.3 | `/usr/local/bin/composer` |
-| Laravel installer | 5.32 | `~/.composer/vendor/bin/laravel` |
+| PHP 8.4 | Homebrew `php@8.4` | `/opt/homebrew/opt/php@8.4/bin` (keg-only) |
+| Composer | Homebrew `composer` | `/opt/homebrew/bin/composer` |
+| Laravel installer | `composer global require` | `~/.composer/vendor/bin/laravel` |
 | intelephense | Mason | `~/.local/share/nvim/mason/bin` |
 | blade-formatter | Mason | `~/.local/share/nvim/mason/bin` |
-| Pint | 1.30.5 | `~/.composer/vendor/bin` (and per-project `vendor/bin/pint`) |
-| PHP CS Fixer | 3.95.23 | `~/.composer/vendor/bin` |
+| Pint | Composer/project dependency | `~/.composer/vendor/bin` or project `vendor/bin/pint` |
+| PHP CS Fixer | Composer | `~/.composer/vendor/bin` |
 
-`~/.zshrc` gained:
+If you also want the tools in interactive shells, add:
 
 ```sh
-export PATH="/usr/local/opt/php@8.4/bin:/usr/local/opt/php@8.4/sbin:$PATH"
+export PATH="/opt/homebrew/opt/php@8.4/bin:/opt/homebrew/opt/php@8.4/sbin:$PATH"
 export PATH="$HOME/.composer/vendor/bin:$PATH"
 ```
 
 `engine.core.php` also patches both into `vim.env.PATH` at startup, so nvim
 launched from a GUI launcher — which never reads `.zshrc` — still finds them.
 
-### Why not plain `brew install php`
-
-**Homebrew has moved Intel macOS to Tier 3 and no longer ships bottles for it.**
-`brew install php composer` fails outright with `no bottle available!`, and
-building PHP from source takes the better part of an hour.
-
-PHP therefore comes from the `shivammathur/php` tap, which does publish bottles
-for this configuration, and Composer from its official installer. Note this
-affects **every** future `brew install` on this machine, not just PHP — expect
-either a tap with its own bottles or a source build.
-
-`php@8.4` is keg-only, which is why it needs the explicit `PATH` entry above.
+`php@8.4` is keg-only, which is why it needs the explicit PATH entry. The
+Neovim bootstrap checks `/opt/homebrew` directly, so GUI Neovim does not depend
+on `.zshrc` having run.
 
 ### Reinstalling
 
 ```sh
-brew tap shivammathur/php
-brew install shivammathur/php/php@8.4
-php -r "copy('https://getcomposer.org/installer','composer-setup.php');"
-php composer-setup.php --install-dir=/usr/local/bin --filename=composer && rm composer-setup.php
+brew install php@8.4 composer
 composer global require laravel/installer
 nvim --headless -c 'MasonInstall intelephense blade-formatter' -c qa
 ```

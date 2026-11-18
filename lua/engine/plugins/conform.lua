@@ -17,6 +17,13 @@
 --   engine.plugins.lsp.lspconfig  Typst and C/C++, which format through the
 --                              language server rather than a CLI
 
+local function lsp_format_mode(bufnr)
+	-- vue_ls and ts_ls both attach to Vue SFCs. Letting Conform fall back to
+	-- either one when Prettier is missing makes formatter selection ambiguous
+	-- and produces output that can differ from the project's CI formatter.
+	return vim.bo[bufnr].filetype == "vue" and "never" or "fallback"
+end
+
 return {
 	"stevearc/conform.nvim",
 
@@ -30,13 +37,14 @@ return {
 			cs = { "csharpier" },
 
 			-- ---------------------------------------------------------------
-			-- React / TypeScript
+			-- Vue / React / TypeScript
 			-- ---------------------------------------------------------------
 			-- prettier-plugin-tailwindcss, when the project has it in
 			-- devDependencies and lists it in .prettierrc, also sorts Tailwind
 			-- classes into the canonical order on every save. That is worth
 			-- adding to any Tailwind project -- it ends all class-order
-			-- diff noise.
+			-- diff noise. Prettier owns the entire Vue SFC so vue_ls and ESLint
+			-- remain focused on language intelligence and correctness.
 			javascript = { "prettier" },
 			javascriptreact = { "prettier" },
 			typescript = { "prettier" },
@@ -61,6 +69,31 @@ return {
 			-- than defaulting to 2015, which matters: on 2015 rustfmt mangles
 			-- async/await and `dyn`.
 			rust = { "rustfmt" },
+
+			-- odinfmt ships with Odin and respects a project odinfmt.json.
+			odin = { "odinfmt" },
+
+			-- ---------------------------------------------------------------
+			-- Graphics: shaders and CMake
+			-- ---------------------------------------------------------------
+			-- clang-format does not recognise .vert/.frag/.comp, so it falls
+			-- back to its C++ rules -- which are the right rules for GLSL and
+			-- HLSL, both of which are C-shaped. A project .clang-format is
+			-- honoured exactly as it is for C++, so shaders and the C++ that
+			-- loads them stay formatted alike.
+			--
+			-- WGSL is deliberately absent: there is no packaged formatter for
+			-- it. wgsl_analyzer offers none either, so the lsp_format fallback
+			-- below is a no-op rather than a surprise.
+			glsl = { "clang-format" },
+			hlsl = { "clang-format" },
+
+			-- gersemi over cmake-format: it is the one that reliably round-trips
+			-- generator expressions like $<TARGET_FILE_DIR:triangle> instead of
+			-- breaking them across lines. Install `gersemi` with Homebrew or
+			-- pipx on macOS.
+			-- Falls back to neocmakelsp's own formatter if it is not installed.
+			cmake = { "gersemi" },
 
 			-- ---------------------------------------------------------------
 			-- PHP / Laravel
@@ -143,7 +176,7 @@ return {
 			local slow = { php = true, blade = true }
 			return {
 				timeout_ms = slow[vim.bo[bufnr].filetype] and 8000 or 3000,
-				lsp_format = "fallback",
+				lsp_format = lsp_format_mode(bufnr),
 			}
 		end,
 	},
@@ -160,7 +193,7 @@ return {
 					["end"] = { args.line2, end_line:len() },
 				}
 			end
-			require("conform").format({ async = true, lsp_format = "fallback", range = range })
+			require("conform").format({ async = true, lsp_format = lsp_format_mode(0), range = range })
 		end, { range = true, desc = "Format the buffer or the selected range" })
 
 		vim.api.nvim_create_user_command("FormatToggle", function(args)
@@ -184,7 +217,9 @@ return {
 				)
 			end
 			if #lines == 1 then
-				lines[#lines + 1] = "  (no conform formatter; LSP formatting is used as fallback)"
+				lines[#lines + 1] = vim.bo.filetype == "vue"
+					and "  (Prettier unavailable; Vue LSP formatting is intentionally disabled)"
+					or "  (no conform formatter; LSP formatting is used as fallback)"
 			end
 			vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO, { title = "conform" })
 		end, { desc = "Show which formatters apply to this buffer" })

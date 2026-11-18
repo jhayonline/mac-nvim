@@ -18,6 +18,12 @@ require("lazy").setup({
 	change_detection = {
 		notify = false,
 	},
+
+	-- Nothing here needs a rock at runtime. oxocarbon is authored in Fennel but
+	-- ships compiled Lua in its own lua/ directory, so enabling luarocks would
+	-- only add a build-time toolchain and a second source of first-start
+	-- failures on a new Mac.
+	rocks = { enabled = false },
 })
 
 require("engine.core.theme").setup()

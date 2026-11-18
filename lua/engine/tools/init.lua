@@ -38,9 +38,11 @@ function M.setup()
 	-- With no argument the template is inferred: from the extension for C/C++
 	-- (header vs. translation unit), and from the filename convention for C#
 	-- (IFoo -> interface, FooController -> controller, FooDbContext -> EF
-	-- context, FooTests -> xunit class, ...). Pass a name to override it --
-	-- :Skel record, :Skel apicontroller, :Skel middleware. <Tab> lists the
-	-- templates valid for the current buffer.
+	-- context, FooTests -> xunit class, ...) and Java (FooException ->
+	-- exception, FooServiceImpl -> implements FooService, FooTest -> JUnit
+	-- class, package-info -> package declaration, ...). Pass a name to
+	-- override it -- :Skel record, :Skel apicontroller, :Skel utility.
+	-- <Tab> lists the templates valid for the current buffer.
 	vim.api.nvim_create_user_command("Skel", function(cmd)
 		require("engine.tools.skeleton").insert(cmd.args ~= "" and cmd.args or nil)
 	end, {

@@ -1,6 +1,6 @@
--- Rust, via rustaceanvim.
+-- Rust support.
 --
--- rustaceanvim owns rust_analyzer end to end: it starts the server itself
+-- rustaceanvim is intentionally disabled: it starts rust-analyzer itself
 -- (so there is deliberately no rust_analyzer block in lspconfig.lua -- two
 -- clients on one buffer is the failure mode) and layers the things
 -- rust-analyzer exposes over LSP extensions rather than standard methods:
@@ -14,6 +14,7 @@
 return {
 	{
 		"mrcjkb/rustaceanvim",
+		enabled = false,
 		version = "^7",
 		lazy = false, -- the plugin is a filetype plugin; it lazy-loads itself
 		ft = { "rust" },
@@ -23,9 +24,16 @@ return {
 
 			-- codelldb ships as a VS Code extension: rustaceanvim needs the
 			-- adapter binary and the bundled liblldb, not the shim script.
+			--
+			-- The library's extension is platform-specific, and getting it wrong
+			-- fails silently: the filereadable() guard below just falls back to
+			-- nvim-dap's adapter, so `:RustLsp debuggables` quietly loses the
+			-- codelldb niceties instead of erroring.
 			local extension = mason_bin .. "/../packages/codelldb/extension"
 			local codelldb = extension .. "/adapter/codelldb"
-			local liblldb = extension .. "/lldb/lib/liblldb.dylib"
+			local libname = vim.fn.has("mac") == 1 and "liblldb.dylib"
+				or (vim.fn.has("win32") == 1 and "liblldb.dll" or "liblldb.so")
+			local liblldb = extension .. "/lldb/lib/" .. libname
 
 			vim.g.rustaceanvim = {
 				tools = {

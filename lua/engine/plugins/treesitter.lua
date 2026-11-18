@@ -86,6 +86,7 @@ return {
 				"markdown",
 				"markdown_inline",
 				"svelte",
+				"vue",
 				"graphql",
 				"bash",
 				"lua",
@@ -96,12 +97,26 @@ return {
 				"vimdoc",
 				"c",
 				"cpp",
+				"odin",
 				"haskell",
 				"gdscript",
 				"gdshader",
 				"godot_resource",
 				-- C# / .NET: c_sharp for sources, xml for .csproj/.props/.slnx,
 				-- sql for the scripts EF migrations generate.
+				--
+				-- razor is what makes .cshtml readable. Without it an MVC
+				-- view had NO highlighting at all: Neovim ships no razor
+				-- syntax file, engine.core.dotnet maps .cshtml away from
+				-- html to its own `razor` filetype, and nothing was left to
+				-- colour it. The parser injects html, c_sharp, css and
+				-- javascript into the right regions, so markup, @{ } blocks
+				-- and @model lines all highlight as themselves.
+				--
+				-- This one is generated at install time (its upstream repo
+				-- ships no pre-generated parser.c), so :TSInstall razor needs
+				-- the tree-sitter CLI and node on $PATH -- both present here.
+				"razor",
 				"c_sharp",
 				"xml",
 				"sql",
@@ -119,6 +134,33 @@ return {
 				-- nvim-treesitter does not ship one.
 				"php",
 				"phpdoc",
+				-- Graphics / game development.
+				--
+				-- glsl covers the .vert/.frag/.comp shaders in opengl-cpp and
+				-- opengl-rust; hlsl is here because a lot of published shader
+				-- code is HLSL and reading it beats guessing.
+				--
+				-- wgsl is what Bevy and wgpu use. wgsl_bevy is a separate
+				-- parser, not a duplicate: Bevy preprocesses its shaders with
+				-- directives (#import, #ifdef) that are not valid WGSL, and the
+				-- plain wgsl parser errors on the first one. engine.core.graphics
+				-- picks between the two per buffer.
+				"glsl",
+				"hlsl",
+				"wgsl",
+				"wgsl_bevy",
+				-- CMakeLists.txt and the Makefiles around the C/C++ projects.
+				"cmake",
+				"make",
+				-- Java, plus the two languages a Gradle build is written in:
+				-- groovy for build.gradle, kotlin for build.gradle.kts.
+				-- Without groovy, build.gradle falls back to no highlighting
+				-- at all -- Neovim has no built-in Groovy syntax worth the name.
+				"java",
+				"groovy",
+				"kotlin",
+				-- settings.gradle and gradle.properties are properties files.
+				"properties",
 			},
 			incremental_selection = {
 				enable = true,
@@ -144,9 +186,13 @@ return {
 				enable_close_on_slash = false,
 			},
 			-- html, xml, jsx/tsx, svelte, php, blade and markdown are built in
-			-- and need no aliases. Razor (.cshtml) is deliberately absent: the
-			-- plugin drives every edit off a treesitter parse, and nvim-treesitter
-			-- ships no razor parser, so an alias registers but never fires.
+			-- and need no aliases. Razor (.cshtml) is still absent even now
+			-- that the razor parser above is installed: autotag matches tags
+			-- through a per-filetype set of node-name patterns in its own
+			-- config/ft.lua, and it ships none for razor. The razor grammar
+			-- names its nodes differently from the html one, so aliasing
+			-- razor -> html would register a config whose patterns never
+			-- match. Closing tags in a view stay manual.
 		})
 	end,
 }

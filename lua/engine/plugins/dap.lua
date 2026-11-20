@@ -93,6 +93,15 @@ return {
                 return in_mason
             end
 
+            -- On macOS, Xcode / Command Line Tools ship lldb-dap but only
+            -- expose it through xcrun, not on $PATH.
+            if vim.fn.has("mac") == 1 and vim.fn.executable("xcrun") == 1 then
+                local found = vim.fn.trim(vim.fn.system({ "xcrun", "-f", name }))
+                if vim.v.shell_error == 0 and is_executable(found) then
+                    return found
+                end
+            end
+
             return ""
         end
 
@@ -256,10 +265,19 @@ return {
             dap.configurations.razor = dap.configurations.cs
             dap.configurations.fsharp = dap.configurations.cs
         else
-            vim.notify(
-                "netcoredbg not found -- run :MasonInstall netcoredbg for C# debugging.",
-                vim.log.levels.WARN
-            )
+            -- Don't nag on every startup; only complain when a C# debug
+            -- session is actually requested. Note: Mason's netcoredbg is an
+            -- x86_64 build, which can't debug arm64 .NET on Apple Silicon --
+            -- use an arm64 build of netcoredbg on $PATH instead.
+            dap.adapters.coreclr = function()
+                vim.notify(
+                    "netcoredbg not found -- put an arm64 netcoredbg on $PATH for C# debugging.",
+                    vim.log.levels.WARN
+                )
+            end
+            dap.configurations.cs = {
+                { name = "Launch (netcoredbg missing)", type = "coreclr", request = "launch" },
+            }
         end
 
         -----------------------------------------------------------------------

@@ -4,7 +4,7 @@ local koda = require("engine.core.koda")
 
 local config = {
 	themes = colorschemes.names(),
-	default = "koda",
+	default = "catppuccin-frappe",
 	state_file = vim.fn.stdpath("state") .. "/theme.txt",
 }
 
@@ -139,6 +139,7 @@ function M.setup(opts)
 		M.cycle(-1)
 	end, { desc = "Cycle to the previous theme" })
 
+	require("engine.core.transparency").setup()
 	M.load()
 end
 
